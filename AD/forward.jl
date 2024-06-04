@@ -7,7 +7,8 @@ reset!(node::Operator) = node.gradient = nothing
 compute!(node::Constant) = node.output
 compute!(node::Variable) = node.output
 function compute!(node::Operator)
-    node.output = forward(node, [input.output for input in node.inputs]...)
+    inputs = map(input -> input.output, node.inputs)
+    node.output = forward(node, inputs...)
     return node.output
 end
 

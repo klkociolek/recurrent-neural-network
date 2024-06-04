@@ -14,7 +14,7 @@ end
 
 function backward!(order::Vector; seed=1.0)
     result = last(order)
-    result.gradient = seed
+    result.gradient = Float32(seed)
     @assert length(result.output) == 1 "Gradient is defined only for scalar functions"
     for node in reverse(order)
         backward!(node)

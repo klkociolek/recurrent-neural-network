@@ -1,4 +1,4 @@
-include("structure.jl")
+include("graph.jl")
 
 import Base: ^, sin, sum, *, +, -, max, reshape, tanh
 import LinearAlgebra: mul!, diagm
@@ -13,9 +13,6 @@ dense(x::GraphNode, w::GraphNode) = BroadcastedOperator(dense, x, w)
 forward(::BroadcastedOperator{typeof(dense)}, x, w) = w * x
 backward(::BroadcastedOperator{typeof(dense)}, x, w, g) = tuple(w' * g, g * x')
 
-reshape(x::GraphNode, new_size::GraphNode) = let 
-    BroadcastedOperator(reshape, x, new_size)
-end
 
 ^(x::GraphNode, n::GraphNode) = ScalarOperator(^, x, n)
 forward(::ScalarOperator{typeof(^)}, x, n) = x^n
@@ -72,24 +69,22 @@ backward(::BroadcastedOperator{typeof(max)}, x, y, g) = let
     tuple(Jx' * g, Jy' * g)
 end
 
-cross_entropy_loss(y_hat::GraphNode, y::GraphNode) = BroadcastedOperator(cross_entropy_loss, y_hat, y)
-forward(::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y) =
+cross_entropy_loss( ŷ::GraphNode, y::GraphNode) = BroadcastedOperator(cross_entropy_loss, ŷ, y)
+forward(::BroadcastedOperator{typeof(cross_entropy_loss)}, ŷ, y) =
     let
-        global cumulative
-        global correct_prediction
-        cumulative  += 1
-        if argmax(y_hat) == argmax(y)
-            correct_prediction += 1
+        global correct_predictions
+        if argmax(ŷ) == argmax(y)
+            correct_predictions += 1
         end
-        y_hat = y_hat .- maximum(y_hat)
-        y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
-        return sum(log.(y_hat) .* y) * - 1.0
+        ŷ =  ŷ .- maximum(ŷ)
+        ŷ = exp.(ŷ) ./ sum(exp.(ŷ))
+        return sum(log.(ŷ) .* y) * - 1.0
     end
-backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y, g) =
+backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, ŷ, y, g) =
     let
-        y_hat = y_hat .- maximum(y_hat)
-        y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
-        return tuple(g .* (y_hat .- y))
+        ŷ = ŷ .- maximum(ŷ)
+        ŷ = exp.(ŷ) ./ sum(exp.(ŷ))
+        return tuple(g .* (ŷ .- y))
     end
 
 tanh(x::GraphNode) = ScalarOperator(tanh, x)

@@ -1,4 +1,5 @@
 using Statistics
+using Printf
 include("automatic_diff.jl")
 include("graph.jl")
 include("operators.jl")
@@ -8,9 +9,10 @@ struct RNN_
     whh::Variable
     b::Variable
     dense1::Variable 
+    dense1_b::Variable 
 end
 
-function train(rnn::RNN_, x::Matrix{Float32}, y::Any, settings,rnn_settings)
+function train(rnn::RNN_, x::Matrix{Float32}, y::Any, settings,rnn_settings,activation_fun_rnn,activation_fun_dense)
     
     samples =  size(x, 2)
     if size(x, 1)%rnn_settings.input != 0
@@ -33,10 +35,10 @@ function train(rnn::RNN_, x::Matrix{Float32}, y::Any, settings,rnn_settings)
             h = Variable(zeros(Float32,rnn_settings.hidden))
             for k in 1:rnn_cells
                 @views x_train[k].output .= x[rnn_settings.input * (k - 1) + 1:rnn_settings.input * k, j]
-                h = recurrent(x_train[k], rnn.wxh, h, rnn.whh, rnn.b) |> tanh
+                h = recurrent(x_train[k], rnn.wxh, h, rnn.whh, rnn.b) |> activation_fun_rnn
             end
 
-            d1 = dense(h, rnn.dense1) |> identity
+            d1 = dense(h, rnn.dense1,rnn.dense1_b) |> activation_fun_dense
             e = cross_entropy_loss(d1, y_train)
             graph= topological_sort(e)
             forward!(graph)
@@ -50,7 +52,7 @@ function train(rnn::RNN_, x::Matrix{Float32}, y::Any, settings,rnn_settings)
     end
 end
 
-function test(rnn::RNN_, x::Matrix{Float32}, y::Any,rnn_settings)
+function test(rnn::RNN_, x::Matrix{Float32}, y::Any,rnn_settings,activation_fun_rnn,activation_fun_dense)
     samples = size(x, 2)
     global correct_predictions = 0
     
@@ -65,10 +67,10 @@ function test(rnn::RNN_, x::Matrix{Float32}, y::Any,rnn_settings)
             h = Variable(zeros(Float32,rnn_settings.hidden))
             for k in 1:rnn_cells
                 @views x_test[k].output .= x[rnn_settings.input * (k - 1) + 1:rnn_settings.input * k, i]
-                h = recurrent(x_test[k], rnn.wxh, h, rnn.whh,b) |> tanh
+                h = recurrent(x_test[k], rnn.wxh, h, rnn.whh,b) |> activation_fun_rnn
             end
             
-            d1 = dense(h, rnn.dense1) |> identity
+            d1 = dense(h, rnn.dense1,rnn.dense1_b) |> activation_fun_dense
             e = cross_entropy_loss(d1, y_test)
             graph= topological_sort(e)
             forward!(graph)
@@ -78,7 +80,7 @@ function test(rnn::RNN_, x::Matrix{Float32}, y::Any,rnn_settings)
 end
 
 function xavier_init(out_dim::UInt32, in_dim::UInt32)
-    return randn(Float32,out_dim, in_dim) * Float32(sqrt(2.0 / (out_dim + in_dim)))
+    return randn(Float32,out_dim, in_dim) * Float32(sqrt(6.0 / (out_dim + in_dim)))
 end
 
 function update_weights!(graph::Vector, learning_rate::Float32, batch_size::UInt32)

@@ -2,22 +2,18 @@ include("graph.jl")
 
 import Base: ^, sin, sum, *, +, -, max, reshape, tanh
 import LinearAlgebra: mul!, diagm
-using Printf
 
 recurrent(x::GraphNode, Wxh::GraphNode,h::GraphNode,Whh::GraphNode,b::GraphNode) = BroadcastedOperator(recurrent, x, Wxh,h,Whh,b)
-forward(::BroadcastedOperator{typeof(recurrent)}, x, Wxh,h,Whh,b) = Wxh * x + Whh * h + b
-backward(::BroadcastedOperator{typeof(recurrent)}, x, Wxh, h, Whh,b, dL_dht) =  return (Wxh' * dL_dht, dL_dht * x', Whh' * dL_dht, dL_dht * h',dL_dht)
+forward(::BroadcastedOperator{typeof(recurrent)}, x, Wxh,h,Whh,b) = Wxh * x + Whh * h .+ b
+backward(::BroadcastedOperator{typeof(recurrent)}, x, Wxh, h, Whh,b, g) =  return (Wxh' * g, g * x', Whh' * g, g * h',g)
 
-
-dense(x::GraphNode, w::GraphNode) = BroadcastedOperator(dense, x, w)
-forward(::BroadcastedOperator{typeof(dense)}, x, w) = w * x
-backward(::BroadcastedOperator{typeof(dense)}, x, w, g) = tuple(w' * g, g * x')
-
+dense(x::GraphNode, w::GraphNode, b::GraphNode)=BroadcastedOperator(dense, x, w, b)
+forward(::BroadcastedOperator{typeof(dense)}, x, w, b) = w * x .+ b
+backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = return (w' * g, g * x', g)
 
 ^(x::GraphNode, n::GraphNode) = ScalarOperator(^, x, n)
 forward(::ScalarOperator{typeof(^)}, x, n) = x^n
 backward(::ScalarOperator{typeof(^)}, x, n, g) = tuple(g * n * x ^ (n-1), g * log(abs(x)) * x ^ n)
-
 
 sin(x::GraphNode) = ScalarOperator(sin, x)
 forward(::ScalarOperator{typeof(sin)}, x) = return sin(x)
@@ -90,6 +86,10 @@ backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, ŷ, y, g) =
 tanh(x::GraphNode) = ScalarOperator(tanh, x)
 forward(::ScalarOperator{typeof(tanh)}, x) = tanh.(x)
 backward(::ScalarOperator{typeof(tanh)}, x, g) = tuple(g .* (1 .- tanh.(x).^2))
+
+relu(x::GraphNode) = BroadcastedOperator(relu, x)
+forward(::BroadcastedOperator{typeof(relu)}, x) = max.(x, zero(x))
+backward(::BroadcastedOperator{typeof(relu)}, x, g) = tuple(g .* (x .> 0))
 
 identity(x::GraphNode) = BroadcastedOperator(identity, x)
 forward(::BroadcastedOperator{typeof(identity)}, x) = x
